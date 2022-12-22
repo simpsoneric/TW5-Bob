@@ -120,7 +120,9 @@ exports.startup = function() {
                     // This is the title based on the current .tid file
                     let newTitle = $tw.syncadaptor.generateTiddlerBaseFilepath(tiddlerObject.tiddlers[0].title, prefix);
                     const existingTiddler = $tw.Bob.Wikis[prefix].wiki.getTiddler(tiddlerObject.tiddlers[0].title);
-                    console.log(existingTiddler.title);
+                    if (existingTiddler !== undefined) {
+                        console.log(existingTiddler.title);
+                    }
                     // Load the tiddler from the wiki, check if they are different (non-existent is changed)
                     if($tw.Bob.Shared.TiddlerHasChanged(existingTiddler, {fields: tiddlerObject.tiddlers[0]})) {
                       // Rename the file
