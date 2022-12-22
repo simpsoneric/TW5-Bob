@@ -50,14 +50,18 @@ exports.startup = function() {
       prefix = prefix || '';
       $tw.Bob.Wikis[prefix].watchers = $tw.Bob.Wikis[prefix].watchers || {};
       try {
+        console.log(`Watching ${folder}`);
         $tw.Bob.Wikis[prefix].watchers[folder] = fs.watch(folder, function (eventType, filename) {
           filename = filename || "";
           // The full path to the current item
           const itemPath = path.join(folder, filename);
+          console.log(`Item is: ${itemPath} -> event ${eventType}`);
           fs.stat(itemPath, function(err, fileStats) {
             // The file extension, if no file extension than an empty string
             const fileExtension = path.extname(filename);
+            console.log(`fs.stat err is: ${err}`);
             if(err) {
+              console.log("in error");
               // The item doesn't exist
               if(err.code === 'ENOENT') {
                 // The item doesn't exist, so it was removed
@@ -80,6 +84,7 @@ exports.startup = function() {
               } else if(fileStats.isFile()) {
                 // if it is a file
                 // Find the tiddler that matches the filepath
+                console.log(fileStats.ino);
                 const tiddlerName = Object.keys($tw.Bob.Files[prefix]).filter(function (item) {
                   // This is to handle some edge cases I ran into while making
                   // it.
@@ -99,12 +104,14 @@ exports.startup = function() {
                     // Load tiddler data from the file
                     tiddlerObject = $tw.loadTiddlersFromFile(itemPath);
                   } catch (e) {
+                    console.log(`error loading tiddler: ${e.code} ${e.path}`);
                     if(e.code !== 'ENOENT') {
                       $tw.Bob.logger.error(e, {level: 3})
                     }
                     // If we reach here the file doesn't exist for other reasons and we don't need to do anything
                     return
                   }
+                  console.log(tiddlerObject.filepath);
                   // Make sure that it at least has a title
                   if(tiddlerObject.tiddlers[0]['title']) {
                     // Test to see if the filename matches what the wiki says it
@@ -113,6 +120,7 @@ exports.startup = function() {
                     // This is the title based on the current .tid file
                     let newTitle = $tw.syncadaptor.generateTiddlerBaseFilepath(tiddlerObject.tiddlers[0].title, prefix);
                     const existingTiddler = $tw.Bob.Wikis[prefix].wiki.getTiddler(tiddlerObject.tiddlers[0].title);
+                    console.log(existingTiddler.title);
                     // Load the tiddler from the wiki, check if they are different (non-existent is changed)
                     if($tw.Bob.Shared.TiddlerHasChanged(existingTiddler, {fields: tiddlerObject.tiddlers[0]})) {
                       // Rename the file
@@ -134,24 +142,38 @@ exports.startup = function() {
                       }
                       // translate tiddler title into filepath
                       const theFilepath = path.join(folder, newTitle + fileExtension);
+
+                      // Check to see if this tiddler data file needs to be renamed
                       if(typeof tiddlerName === 'string' && tiddlerName !== tiddlerObject.tiddlers[0].title) {
                         $tw.Bob.logger.log('Rename Tiddler ', tiddlerName, ' to ', newTitle, {level:2});
                         // Remove the old tiddler
                         $tw.Bob.DeleteTiddler(folder, tiddlerName + fileExtension, prefix);
-                      }
+                        console.log(`Calling unlink on ${itemPath}`);
 
-                      fs.unlink(itemPath, (err)=>{
-                        if(err) {
-                          // nothing, error if the tiddler doesn't exist just means the monitor is most likely fighting with another syncer like git.
-                        }
-                        // Create the new tiddler
+                        // remove old one from file system, and create new one
+                        fs.unlink(itemPath, (err)=>{
+                          console.log(`Unlink done on ${itemPath} with err: ${err}`)
+                          if(err) {
+                            // nothing, error if the tiddler doesn't exist just means the monitor is most likely fighting with another syncer like git.
+                          }
+                          // Create the new tiddler
+                          const newTiddler = $tw.Bob.Shared.normalizeTiddler({fields: tiddlerObject.tiddlers[0]});
+                          console.log(`newTiddler name is ${newTiddler}`);
+                          $tw.syncadaptor.saveTiddler(newTiddler, prefix);
+                        });
+                      } 
+                      // No need to remove/rename file, just update existing
+                      else {
                         const newTiddler = $tw.Bob.Shared.normalizeTiddler({fields: tiddlerObject.tiddlers[0]});
-                        // Save the new file
+                        console.log(`newTiddler name is ${newTiddler}`);
                         $tw.syncadaptor.saveTiddler(newTiddler, prefix);
-                      });
+                      }
                     }
                   }
                 }
+              }
+              else {
+                  console.log("is other?");
               }
             }
           })
@@ -172,11 +194,13 @@ exports.startup = function() {
       const itemPath = path.join(folder, filename);
       // Get the file name because it isn't always the same as the tiddler
       // title.
+      console.log(`call delete tiddler: path: ${itemPath}`);
 
       // At this point the tiddlerName is the internal name so we need to switch
       // to the non-prefixed name for the message to the browsers
       Object.keys($tw.Bob.Files[prefix]).forEach(function(tiddlerName) {
         if($tw.Bob.Files[prefix][tiddlerName].filepath === itemPath) {
+          console.log(`Sending delete tiddler: name: ${tiddlerName} path: ${itemPath}`);
           // Remove the tiddler info from $tw.Bob.Files
           delete $tw.Bob.Files[prefix][tiddlerName];
           // Remove the tiddler on the server
