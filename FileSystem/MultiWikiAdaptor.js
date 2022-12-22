@@ -154,6 +154,8 @@ if($tw.node) {
   Save a tiddler and invoke the callback with (err,adaptorInfo,revision)
   */
   MultiWikiAdaptor.prototype.saveTiddler = function(tiddler, prefix, connectionInd, callback) {
+    let isRemoteChange = (connectionInd !== undefined);
+
     const self = this;
     if(typeof prefix === 'function') {
       callback = prefix;
@@ -173,9 +175,9 @@ if($tw.node) {
     if(!$tw.Bob.Wikis[prefix]) {
       $tw.ServerSide.loadWiki(prefix, finish);
     } else {
-      finish();
+      finish(isRemoteChange);
     }
-    function finish() {
+    function finish(isRemoteChange) {
       if(tiddler && $tw.Bob.Wikis[prefix].wiki.filterTiddlers($tw.Bob.ExcludeFilter).indexOf(tiddler.fields.title) === -1) {
         self.getTiddlerFileInfo(new $tw.Tiddler(tiddler.fields), prefix,
          function(err,fileInfo) {
@@ -185,14 +187,17 @@ if($tw.node) {
           // Make sure that the tiddler has actually changed before saving it
           if($tw.Bob.Shared.TiddlerHasChanged(tiddler, $tw.Bob.Wikis[prefix].wiki.getTiddler(tiddler.fields.title))) {
             // Save the tiddler in memory.
+            $tw.Bob.logger.log('Save Tiddler in memory', tiddler.fields.title, {level:2});
             internalSave(tiddler, prefix, connectionInd);
             $tw.Bob.Wikis[prefix].modified = true;
-            $tw.Bob.logger.log('Save Tiddler ', tiddler.fields.title, {level:2});
-            try {
-              $tw.utils.saveTiddlerToFileSync(new $tw.Tiddler(tiddler.fields), fileInfo)
-              $tw.hooks.invokeHook('wiki-modified', prefix);
-            } catch (e) {
-                $tw.Bob.logger.log('Error Saving Tiddler ', tiddler.fields.title, e, {level:1});
+            if (isRemoteChange) {
+                try {
+                  $tw.Bob.logger.log('Save Tiddler To Disk', tiddler.fields.title, {level:2});
+                  $tw.utils.saveTiddlerToFileSync(new $tw.Tiddler(tiddler.fields), fileInfo)
+                  $tw.hooks.invokeHook('wiki-modified', prefix);
+                } catch (e) {
+                  $tw.Bob.logger.log('Error Saving Tiddler ', tiddler.fields.title, e, {level:1});
+                }
             }
           }
         });
